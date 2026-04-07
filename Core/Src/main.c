@@ -19,19 +19,22 @@
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 
+
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include <stdio.h>
+#include "cmsis_gcc.h"
+#include "stm32f7xx_hal.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
-
+typedef void (*pFunction ) (void);
 /* USER CODE END PTD */
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-
+#define APP_ADDR_FLASH 0x8008000
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -41,19 +44,76 @@
 
 /* Private variables ---------------------------------------------------------*/
 
+UART_HandleTypeDef huart3;
+
 /* USER CODE BEGIN PV */
 
+void bootJump(void);
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 static void MPU_Config(void);
+static void MX_GPIO_Init(void);
+static void MX_USART3_UART_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+
+
+__attribute__((noreturn)) void BootJumpASM(uint32_t SP, uint32_t RH) {
+    __asm volatile (
+        "msr msp, %0 \n"  
+        "bx %1       \n"  
+        :
+        : "r" (SP), "r" (RH) 
+        : "memory"
+    );
+    
+    while(1);
+}
+
+void bootJump(){
+  uint32_t JumpAddress;
+  pFunction JumpFunction;
+
+  printf("BootLoader Start \r\n");
+
+  if( ( ( *(volatile uint32_t*) APP_ADDR_FLASH ) & 0x2FF00000) == 0x20000000 )
+  {
+    printf("App Starting.. \r\n" );
+    HAL_Delay(100);
+
+    JumpAddress = *( volatile uint32_t*) (APP_ADDR_FLASH + 4);
+    JumpFunction = (pFunction) JumpAddress;
+
+    __set_MSP(*(volatile uint32_t*) APP_ADDR_FLASH);
+
+    HAL_DeInit();
+    __disable_irq();
+
+    JumpFunction();
+  } 
+  else{
+    printf("No Application found !!\r\n"); 
+  }
+}
+
+int _write(int file, char* ptr, int len){
+  int DataIdx;
+
+  for (DataIdx = 0; DataIdx < len; DataIdx++)
+  {
+    HAL_UART_Transmit(&huart3, (uint8_t* )ptr++,1,100);
+
+  }
+
+  return len;
+  
+}
 
 /* USER CODE END 0 */
 
@@ -66,18 +126,6 @@ int main(void)
 
   /* USER CODE BEGIN 1 */
 
-  __HAL_RCC_GPIOB_CLK_ENABLE();
-
-  /* 2. Configura il pin come output */
-  GPIO_InitTypeDef GPIO_InitStruct = {0};
-  GPIO_InitStruct.Pin = GPIO_PIN_0; // PB0 - LED Verde
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
-
-  /* 3. Accendi il LED */
-  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_0, GPIO_PIN_SET);
   /* USER CODE END 1 */
 
   /* MPU Configuration--------------------------------------------------------*/
@@ -100,8 +148,10 @@ int main(void)
   /* USER CODE END SysInit */
 
   /* Initialize all configured peripherals */
+  MX_GPIO_Init();
+  MX_USART3_UART_Init();
   /* USER CODE BEGIN 2 */
-
+  bootJump();
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -154,6 +204,60 @@ void SystemClock_Config(void)
   {
     Error_Handler();
   }
+}
+
+/**
+  * @brief USART3 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_USART3_UART_Init(void)
+{
+
+  /* USER CODE BEGIN USART3_Init 0 */
+
+  /* USER CODE END USART3_Init 0 */
+
+  /* USER CODE BEGIN USART3_Init 1 */
+
+  /* USER CODE END USART3_Init 1 */
+  huart3.Instance = USART3;
+  huart3.Init.BaudRate = 115200;
+  huart3.Init.WordLength = UART_WORDLENGTH_8B;
+  huart3.Init.StopBits = UART_STOPBITS_1;
+  huart3.Init.Parity = UART_PARITY_NONE;
+  huart3.Init.Mode = UART_MODE_TX_RX;
+  huart3.Init.HwFlowCtl = UART_HWCONTROL_NONE;
+  huart3.Init.OverSampling = UART_OVERSAMPLING_16;
+  huart3.Init.OneBitSampling = UART_ONE_BIT_SAMPLE_DISABLE;
+  huart3.AdvancedInit.AdvFeatureInit = UART_ADVFEATURE_NO_INIT;
+  if (HAL_UART_Init(&huart3) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN USART3_Init 2 */
+
+  /* USER CODE END USART3_Init 2 */
+
+}
+
+/**
+  * @brief GPIO Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_GPIO_Init(void)
+{
+  /* USER CODE BEGIN MX_GPIO_Init_1 */
+
+  /* USER CODE END MX_GPIO_Init_1 */
+
+  /* GPIO Ports Clock Enable */
+  __HAL_RCC_GPIOD_CLK_ENABLE();
+
+  /* USER CODE BEGIN MX_GPIO_Init_2 */
+
+  /* USER CODE END MX_GPIO_Init_2 */
 }
 
 /* USER CODE BEGIN 4 */
