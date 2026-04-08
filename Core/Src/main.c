@@ -18,13 +18,16 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
-
+#include "mbedtls.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include <stdio.h>
 #include "cmsis_gcc.h"
+#include "sha512.h"
 #include "stm32f7xx_hal.h"
+#include "mbedtls/sha256.h"
+
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -35,6 +38,7 @@ typedef void (*pFunction ) (void);
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
 #define APP_ADDR_FLASH 0x8008000
+#define APP_ADDR_HEADER 0x801A000
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -80,25 +84,30 @@ void bootJump(){
   uint32_t JumpAddress;
   pFunction JumpFunction;
 
-  printf("BootLoader Start \r\n");
+  printf("App Starting.. \r\n" );
+  HAL_Delay(100);
 
+  JumpAddress = *( volatile uint32_t*) (APP_ADDR_FLASH + 4);
+  JumpFunction = (pFunction) JumpAddress;
+
+  __set_MSP(*(volatile uint32_t*) APP_ADDR_FLASH);
+
+  HAL_DeInit();
+  __disable_irq();
+
+  JumpFunction();
+}
+
+int checkApp(){
+
+  printf("BootLoader Start \r\n");
   if( ( ( *(volatile uint32_t*) APP_ADDR_FLASH ) & 0x2FF00000) == 0x20000000 )
   {
-    printf("App Starting.. \r\n" );
-    HAL_Delay(100);
-
-    JumpAddress = *( volatile uint32_t*) (APP_ADDR_FLASH + 4);
-    JumpFunction = (pFunction) JumpAddress;
-
-    __set_MSP(*(volatile uint32_t*) APP_ADDR_FLASH);
-
-    HAL_DeInit();
-    __disable_irq();
-
-    JumpFunction();
+    return 1;
   } 
   else{
     printf("No Application found !!\r\n"); 
+    return 0;
   }
 }
 
@@ -150,8 +159,38 @@ int main(void)
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
   MX_USART3_UART_Init();
+  MX_MBEDTLS_Init();
   /* USER CODE BEGIN 2 */
-  bootJump();
+  if(checkApp()){
+
+   
+   
+
+
+    // mbedtls_sha256_context ctx;
+    uint8_t outputHash[32];
+    uint32_t firmSize = *(uint32_t*) APP_ADDR_HEADER;
+
+    printf("Size : %ld \r\n",firmSize);
+    
+    mbedtls_sha256_context ctx;
+
+    mbedtls_sha256_init(&ctx);
+    mbedtls_sha256_starts(&ctx,0);
+    mbedtls_sha256_update(&ctx,(uint8_t* )APP_ADDR_FLASH,firmSize);
+    mbedtls_sha256_finish(&ctx,outputHash);
+    mbedtls_sha256_free(&ctx);
+
+    for (int i = 0; i < 32; i++) {
+    printf("%02X", outputHash[i]);  
+    }
+    printf("\r\n");
+ 
+
+
+    bootJump();
+  }
+  
   /* USER CODE END 2 */
 
   /* Infinite loop */
