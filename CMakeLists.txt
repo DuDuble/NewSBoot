@@ -34,6 +34,14 @@ enable_language(C ASM)
 # Create an executable object type
 add_executable(${CMAKE_PROJECT_NAME})
 
+# --- Generazione del .bin ---
+add_custom_command(TARGET ${CMAKE_PROJECT_NAME} POST_BUILD
+    COMMAND ${CMAKE_OBJCOPY} -O binary
+            $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
+            ${CMAKE_PROJECT_NAME}.bin
+    COMMENT "Generating .bin file"
+)
+
 # Add STM32CubeMX generated sources
 add_subdirectory(cmake/stm32cubemx)
 
