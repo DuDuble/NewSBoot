@@ -113,6 +113,22 @@ int checkApp(){
   }
 }
 
+// Calculate SHA256 of the firmware in flash
+void sha256Calc(uint8_t* outputHash,uint32_t size){
+    mbedtls_sha256_context ctx;
+
+    mbedtls_sha256_init(&ctx);
+    mbedtls_sha256_starts(&ctx,0);
+    mbedtls_sha256_update(&ctx,(uint8_t* )APP_ADDR_FLASH,size);
+    mbedtls_sha256_finish(&ctx,outputHash);
+    mbedtls_sha256_free(&ctx);
+}
+
+// Compare calculated hash with the hash stored in the firmware header
+int checkIntegrity(uint8_t* hash){
+    return memcmp(hash,(uint8_t*) APP_ADDR_HEADER + 4,32);
+}
+
 int _write(int file, char* ptr, int len){
   int DataIdx;
 
@@ -125,6 +141,8 @@ int _write(int file, char* ptr, int len){
   return len;
   
 }
+
+
 
 /* USER CODE END 0 */
 
@@ -165,38 +183,12 @@ int main(void)
   /* USER CODE BEGIN 2 */
   if(checkApp()){
 
-   
-   
-
-
-    // mbedtls_sha256_context ctx;
     uint8_t outputHash[32];
     uint32_t firmSize = *(uint32_t*) APP_ADDR_HEADER;
+    sha256Calc(outputHash,firmSize);
 
-    printf("Size : %ld \r\n",firmSize);
-    
-    mbedtls_sha256_context ctx;
 
-    mbedtls_sha256_init(&ctx);
-    mbedtls_sha256_starts(&ctx,0);
-    mbedtls_sha256_update(&ctx,(uint8_t* )APP_ADDR_FLASH,firmSize);
-    mbedtls_sha256_finish(&ctx,outputHash);
-    mbedtls_sha256_free(&ctx);
-
-    for (int i = 0; i < 32; i++) {
-    printf("%02X", outputHash[i]);  
-    }
-    printf("\r\n");
-
-    printf("Hash nell'header \r\n");
-    uint8_t headerHash[32];
-    memcpy(headerHash,(uint8_t*) APP_ADDR_HEADER + 4,32);
-        for (int i = 0; i < 32; i++) {
-    printf("%02X", headerHash[i]);  
-    }
-    printf("\r\n");
-
-    if (!memcmp(headerHash,outputHash,32))
+    if (!checkIntegrity(outputHash))
     {
       printf("Confronto avvenuto con successo,Hash corrispondono \r\n");
       HAL_Delay(100);
