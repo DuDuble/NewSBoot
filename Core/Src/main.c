@@ -23,6 +23,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include <stdio.h>
+#include <string.h>
 #include "cmsis_gcc.h"
 #include "sha512.h"
 #include "stm32f7xx_hal.h"
@@ -37,8 +38,9 @@ typedef void (*pFunction ) (void);
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-#define APP_ADDR_FLASH 0x8008000
-#define APP_ADDR_HEADER 0x801A000
+#define APP_ADDR_HEADER 0x8008000
+#define HEADER_OFFSET 512
+#define APP_ADDR_FLASH (APP_ADDR_HEADER + HEADER_OFFSET) 
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -185,10 +187,23 @@ int main(void)
     printf("%02X", outputHash[i]);  
     }
     printf("\r\n");
- 
 
+    printf("Hash nell'header \r\n");
+    uint8_t headerHash[32];
+    memcpy(headerHash,(uint8_t*) APP_ADDR_HEADER + 4,32);
+        for (int i = 0; i < 32; i++) {
+    printf("%02X", headerHash[i]);  
+    }
+    printf("\r\n");
 
-    bootJump();
+    if (!memcmp(headerHash,outputHash,32))
+    {
+      printf("Confronto avvenuto con successo,Hash corrispondono \r\n");
+      HAL_Delay(100);
+      bootJump();
+    }
+    else
+      printf("Hash NON corrispondono \r\n");
   }
   
   /* USER CODE END 2 */
