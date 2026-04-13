@@ -22,13 +22,16 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include <stdint.h>
 #include <stdio.h>
 #include <string.h>
 #include "cmsis_gcc.h"
 #include "sha512.h"
 #include "stm32f7xx_hal.h"
 #include "mbedtls/sha256.h"
-
+#include "mbedtls/rsa.h"
+#include "mbedtls/bignum.h"
+#include "mbedtls/md.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -38,7 +41,7 @@ typedef void (*pFunction ) (void);
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-#define APP_ADDR_HEADER 0x8008000
+#define APP_ADDR_HEADER 0x8018000
 #define HEADER_OFFSET 512
 #define APP_ADDR_FLASH (APP_ADDR_HEADER + HEADER_OFFSET) 
 /* USER CODE END PD */
@@ -53,6 +56,13 @@ typedef void (*pFunction ) (void);
 UART_HandleTypeDef huart3;
 
 /* USER CODE BEGIN PV */
+
+// Public Key 
+const uint8_t modulus[] = {189,223,103,217,109,14,149,211,82,50,127,220,222,53,149,55,241,102,173,38,35,139,227,156,159,65,15,120,162,178,31,195,34,11,136,3,72,188,197,58,30,15,20,218,54,204,95,208,49,28,57,150,105,152,254,162,255,14,14,176,168,145,203,208,172,19,90,100,38,127,96,23,54,26,2,92,238,194,111,220,89,249,53,245,4,228,137,8,252,36,158,4,248,17,70,179,220,248,14,56,76,64,67,253,0,26,128,202,66,22,38,160,75,137,218,48,131,253,217,75,206,116,53,91,184,129,84,237,48,243,223,1,83,146,18,100,21,161,13,171,116,16,0,33,135,217,202,242,36,20,243,12,81,174,45,25,148,2,10,62,176,55,16,40,153,62,173,127,51,215,26,11,18,105,127,201,9,61,97,127,92,179,93,67,6,128,114,86,5,144,220,162,57,189,93,14,251,189,79,13,92,5,11,146,82,182,219,137,12,171,186,117,178,85,86,82,197,243,31,157,72,123,108,240,220,80,214,88,124,133,11,243,66,144,192,44,140,56,246,165,245,235,254,175,144,205,150,157,153,248,121,0,130,69,84,55};
+
+const uint8_t r2[] = {139,184,113,204,56,185,87,188,51,23,237,223,76,114,26,231,44,196,197,214,205,97,142,54,228,216,44,222,162,202,49,211,230,116,53,239,174,176,75,176,143,39,14,151,206,226,40,200,85,12,232,131,107,116,97,139,12,84,112,78,80,25,65,32,97,238,207,140,78,225,116,35,151,58,248,15,30,129,254,147,131,173,211,243,12,207,134,140,203,220,6,179,155,145,3,120,240,38,122,66,203,87,10,245,195,251,212,49,93,16,36,66,199,3,150,138,71,164,18,2,63,173,100,190,9,148,102,158,100,219,229,67,161,70,43,151,218,148,176,163,240,235,189,9,31,64,60,214,152,61,137,137,49,102,13,28,195,116,158,28,201,243,72,78,200,30,245,43,186,240,53,14,66,177,116,174,70,79,21,193,67,115,91,96,134,54,88,210,181,211,96,250,238,153,44,112,106,61,143,170,226,187,145,161,153,243,94,110,80,107,12,181,190,126,24,252,234,60,163,220,206,41,139,138,98,58,195,67,196,15,20,95,206,222,12,105,11,69,154,151,185,220,42,76,93,221,220,21,39,40,223,117,214,228,198,140};
+
+const uint8_t exponent[] = {0x00, 0x01, 0x00, 0x01};
 
 void bootJump(void);
 /* USER CODE END PV */
@@ -70,17 +80,17 @@ static void MX_USART3_UART_Init(void);
 /* USER CODE BEGIN 0 */
 
 
-__attribute__((noreturn)) void BootJumpASM(uint32_t SP, uint32_t RH) {
-    __asm volatile (
-        "msr msp, %0 \n"  
-        "bx %1       \n"  
-        :
-        : "r" (SP), "r" (RH) 
-        : "memory"
-    );
+// __attribute__((noreturn)) void BootJumpASM(uint32_t SP, uint32_t RH) {
+//     __asm volatile (
+//         "msr msp, %0 \n"  
+//         "bx %1       \n"  
+//         :
+//         : "r" (SP), "r" (RH) 
+//         : "memory"
+//     );
     
-    while(1);
-}
+//     while(1);
+// }
 
 void bootJump(){
   uint32_t JumpAddress;
@@ -122,6 +132,26 @@ void sha256Calc(uint8_t* outputHash,uint32_t size){
     mbedtls_sha256_update(&ctx,(uint8_t* )APP_ADDR_FLASH,size);
     mbedtls_sha256_finish(&ctx,outputHash);
     mbedtls_sha256_free(&ctx);
+}
+
+int checkAuth(uint8_t* hash,uint8_t* sign){
+  mbedtls_rsa_context rsa;
+
+  mbedtls_rsa_init(&rsa,MBEDTLS_RSA_PKCS_V15,0);
+
+  int moduleSize = sizeof(modulus)/sizeof(modulus[0]);
+  int expSize = sizeof(exponent) / sizeof(exponent[0]);
+
+  uint8_t output[256];
+  mbedtls_rsa_import_raw(&rsa,modulus,moduleSize,NULL,0,NULL,0,NULL,0,exponent,expSize);
+
+  mbedtls_rsa_public(&rsa,sign,output);
+
+  
+  int ret = mbedtls_rsa_pkcs1_verify(&rsa,NULL,NULL,MBEDTLS_RSA_PUBLIC,MBEDTLS_MD_SHA256,32,hash,sign);
+
+  printf("RET ---> %d\r\n",ret);
+  return ret;
 }
 
 // Compare calculated hash with the hash stored in the firmware header
@@ -188,14 +218,35 @@ int main(void)
     sha256Calc(outputHash,firmSize);
 
 
-    if (!checkIntegrity(outputHash))
+    uint8_t signature[256];
+    memcpy(signature,(uint8_t*)APP_ADDR_HEADER + 36, 256);
+    
+    // for (int i = 0; i < 256; i++)
+    // {
+    //   printf("%02X",signature[i]);
+    // }
+    // printf("\r\n");
+
+    HAL_Delay(100);
+
+    if(!checkAuth(outputHash,signature))
     {
-      printf("Confronto avvenuto con successo,Hash corrispondono \r\n");
+      printf("Firma VERIFICATA \r\n");
       HAL_Delay(100);
-      bootJump();
+      if (!checkIntegrity(outputHash))
+      {
+        printf("Confronto avvenuto con successo,Hash corrispondono \r\n");
+        HAL_Delay(100);
+        bootJump();
+      }
+      else
+        printf("Hash NON corrispondono \r\n");
     }
-    else
-      printf("Hash NON corrispondono \r\n");
+    else{
+      printf("Autenticazione non avvenuta \r\n");
+    }
+
+  
   }
   
   /* USER CODE END 2 */
