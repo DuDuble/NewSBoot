@@ -32,6 +32,8 @@
 #include "mbedtls/rsa.h"
 #include "mbedtls/bignum.h"
 #include "mbedtls/md.h"
+#include "stm32f7xx_hal_flash.h"
+#include "stm32f7xx_hal_flash_ex.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -41,12 +43,14 @@ typedef void (*pFunction ) (void);
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-#define APP_ADDR_HEADER 0x8018000
+#define BOOT_META 0x8018000
+#define APP_ADDR_HEADER 0x8020000
 #define HEADER_OFFSET 512
 #define APP_ADDR_FLASH (APP_ADDR_HEADER + HEADER_OFFSET) 
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
+
 /* USER CODE BEGIN PM */
 
 /* USER CODE END PM */
@@ -63,6 +67,16 @@ const uint8_t modulus[] = {189,223,103,217,109,14,149,211,82,50,127,220,222,53,1
 const uint8_t r2[] = {139,184,113,204,56,185,87,188,51,23,237,223,76,114,26,231,44,196,197,214,205,97,142,54,228,216,44,222,162,202,49,211,230,116,53,239,174,176,75,176,143,39,14,151,206,226,40,200,85,12,232,131,107,116,97,139,12,84,112,78,80,25,65,32,97,238,207,140,78,225,116,35,151,58,248,15,30,129,254,147,131,173,211,243,12,207,134,140,203,220,6,179,155,145,3,120,240,38,122,66,203,87,10,245,195,251,212,49,93,16,36,66,199,3,150,138,71,164,18,2,63,173,100,190,9,148,102,158,100,219,229,67,161,70,43,151,218,148,176,163,240,235,189,9,31,64,60,214,152,61,137,137,49,102,13,28,195,116,158,28,201,243,72,78,200,30,245,43,186,240,53,14,66,177,116,174,70,79,21,193,67,115,91,96,134,54,88,210,181,211,96,250,238,153,44,112,106,61,143,170,226,187,145,161,153,243,94,110,80,107,12,181,190,126,24,252,234,60,163,220,206,41,139,138,98,58,195,67,196,15,20,95,206,222,12,105,11,69,154,151,185,220,42,76,93,221,220,21,39,40,223,117,214,228,198,140};
 
 const uint8_t exponent[] = {0x00, 0x01, 0x00, 0x01};
+
+typedef struct 
+{
+  /* data */
+  uint32_t version;
+  uint32_t size;
+  uint8_t hash[32];
+  uint8_t sign[256];
+}Header;
+
 
 void bootJump(void);
 /* USER CODE END PV */
@@ -108,6 +122,8 @@ void bootJump(){
   __disable_irq();
 
   JumpFunction();
+
+  
 }
 
 int checkApp(){
@@ -134,6 +150,12 @@ void sha256Calc(uint8_t* outputHash,uint32_t size){
     mbedtls_sha256_free(&ctx);
 }
 
+// Compare calculated hash with the hash stored in the firmware header
+int checkIntegrity(uint8_t* hash){
+    return memcmp(hash,(uint8_t*) APP_ADDR_HEADER + 8,32);
+}
+
+
 int checkAuth(uint8_t* hash,uint8_t* sign){
   mbedtls_rsa_context rsa;
 
@@ -154,9 +176,27 @@ int checkAuth(uint8_t* hash,uint8_t* sign){
   return ret;
 }
 
-// Compare calculated hash with the hash stored in the firmware header
-int checkIntegrity(uint8_t* hash){
-    return memcmp(hash,(uint8_t*) APP_ADDR_HEADER + 4,32);
+
+uint32_t getCurrentVersion(){
+    uint32_t version = *(uint32_t*) BOOT_META;
+    return version;
+}
+
+void updateVersion(uint32_t newVersion){
+
+  HAL_FLASH_Unlock();
+  
+  FLASH_EraseInitTypeDef erase;
+  erase.TypeErase = FLASH_TYPEERASE_SECTORS;
+  erase.NbSectors = 1;
+  erase.Sector = FLASH_SECTOR_3;
+  erase.VoltageRange = FLASH_VOLTAGE_RANGE_3;
+
+  uint32_t eraseError;
+  HAL_FLASHEx_Erase(&erase,&eraseError);
+  HAL_FLASH_Program(TYPEPROGRAM_WORD, BOOT_META, newVersion);
+
+  HAL_FLASH_Lock();
 }
 
 int _write(int file, char* ptr, int len){
@@ -214,33 +254,46 @@ int main(void)
   if(checkApp()){
 
     uint8_t outputHash[32];
-    uint32_t firmSize = *(uint32_t*) APP_ADDR_HEADER;
-    sha256Calc(outputHash,firmSize);
+    Header header = *(Header* ) APP_ADDR_HEADER;
 
-
-    uint8_t signature[256];
-    memcpy(signature,(uint8_t*)APP_ADDR_HEADER + 36, 256);
     
-    // for (int i = 0; i < 256; i++)
-    // {
-    //   printf("%02X",signature[i]);
-    // }
-    // printf("\r\n");
+    sha256Calc(outputHash,header.size);
 
+
+    
+    
+    
     HAL_Delay(100);
-
-    if(!checkAuth(outputHash,signature))
+    
+    if(!checkAuth(outputHash,header.sign))
     {
       printf("Firma VERIFICATA \r\n");
       HAL_Delay(100);
+      
+      
       if (!checkIntegrity(outputHash))
       {
         printf("Confronto avvenuto con successo,Hash corrispondono \r\n");
         HAL_Delay(100);
-        bootJump();
+
+        printf("New Version ---> %ld \r\n",header.version);
+        uint32_t current_version = getCurrentVersion();
+        printf("Versione corrente -------> %ld \r\n",current_version);
+        if(current_version < header.version){
+          updateVersion(header.version);
+          bootJump();
+        }
+        else{
+          if(current_version == header.version)
+              bootJump();
+          else
+            printf("Roll-back rilevato \r\n");
+        }
       }
       else
         printf("Hash NON corrispondono \r\n");
+
+
     }
     else{
       printf("Autenticazione non avvenuta \r\n");
