@@ -34,6 +34,7 @@
 #include "mbedtls/md.h"
 #include "stm32f7xx_hal_flash.h"
 #include "stm32f7xx_hal_flash_ex.h"
+#include "bootutil/bench.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
