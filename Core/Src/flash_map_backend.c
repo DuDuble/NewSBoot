@@ -1,7 +1,10 @@
 #include "flash_map_backend/flash_map_backend.h"
+#include "stm32f7xx_hal_flash.h"
+#include "sysflash/sysflash.h"
 #include <stdbool.h>
 #include <stddef.h>
 #include <string.h>
+#include <stm32_hal_legacy.h>
 
 //------------ Alignment -----------------
 #define ALIGN_OFFSET(num,align)  ((num) & ((align)-1))
@@ -11,42 +14,42 @@
 #define ARRAY_SIZE(arr)    (sizeof(arr) / sizeof((arr)[0]))
 
 //-------------- Bootloader ---------------
-#define FLASH_AREA_BOOTLOADER_ID  0 // va in sysflash
+#define FLASH_AREA_BOOTLOADER  0 // va in sysflash
 #define FLASH_DEVICE_INTERNAL_FLASH 0 // va in sysflash
 #define BOOTLOADER_START_ADDRESS 0x80000000
 #define BOOTLOADER_SIZE 0x19000 // 100KB ( FLASH + META section )
 
 //-------------- Primary Slot ---------------
-#define FLASH_AREA_PRIMARY_ID 1
+
 #define IMAGE_PRIMARY_START_ADDRESS 0x8020000
 #define APPLICATION_SIZE 0x12200 // 72K + 512 ( FLASH + HEADER )
 
 // //------------- Secondary Slot ---------------
-// #define FLASH_AREA_SECONDARY_ID 2
-// #define IMAGE_SECONDARY_START_ADDRESS 0x8032200
+
+#define IMAGE_SECONDARY_START_ADDRESS 0x8032200
 
 //--------------- Aree ----------------------
 
 static const flash_area bootloader = {
-    .fa_id = FLASH_AREA_BOOTLOADER_ID,
+    .fa_id = FLASH_AREA_BOOTLOADER,
     .fa_device_id = FLASH_DEVICE_INTERNAL_FLASH,
     .fa_off = BOOTLOADER_START_ADDRESS,
     .fa_size = BOOTLOADER_SIZE, 
 };
 
 static const flash_area primary_image = {
-    .fa_id = FLASH_AREA_PRIMARY_ID,
+    .fa_id = FLASH_AREA_IMAGE_PRIMARY(0),
     .fa_device_id = FLASH_DEVICE_INTERNAL_FLASH,
     .fa_off = IMAGE_PRIMARY_START_ADDRESS,
     .fa_size = APPLICATION_SIZE
 };
 
-// static const  flash_area secondary_image = {
-//     .fa_id = FLASH_AREA_SECONDARY_ID,
-//     .fa_device_id = FLASH_DEVICE_INTERNAL_FLASH,
-//     .fa_off = IMAGE_SECONDARY_START_ADDRESS,
-//     .fa_size = APPLICATION_SIZE
-// };
+static const  flash_area secondary_image = {
+    .fa_id = FLASH_AREA_IMAGE_SECONDARY(0),
+    .fa_device_id = FLASH_DEVICE_INTERNAL_FLASH,
+    .fa_off = IMAGE_SECONDARY_START_ADDRESS,
+    .fa_size = APPLICATION_SIZE
+};
 
 //------------ Areas Array ------------
 
@@ -54,7 +57,7 @@ static const flash_area* arr_flash_areas[] =
 {
     &bootloader,
     &primary_image,
-    //&secondary_image,
+    &secondary_image,
 };
 
 static const flash_area* lookup_flash_area(uint8_t id){
@@ -72,7 +75,7 @@ static const flash_area* lookup_flash_area(uint8_t id){
 int flash_area_open(uint8_t id, const struct flash_area **area_outp){
     const flash_area* area = lookup_flash_area(id);
     *area_outp = area;
-    return area == NULL ? 0 : -1;
+    return area == NULL ? -1 : 0;
 }
 
 
@@ -104,6 +107,20 @@ int flash_area_erase(const struct flash_area *fa, uint32_t off, uint32_t len){
 }
 
 int flash_area_write(const struct flash_area *fa, uint32_t off, const void *src, uint32_t len){
+    
+  HAL_FLASH_Unlock();
+  
+  FLASH_EraseInitTypeDef erase;
+  erase.TypeErase = FLASH_TYPEERASE_SECTORS;
+  erase.NbSectors = 1;
+  erase.Sector = FLASH_SECTOR_3;
+  erase.VoltageRange = FLASH_VOLTAGE_RANGE_3;
+
+  uint32_t eraseError;
+  HAL_FLASHEx_Erase(&erase,&eraseError);
+  HAL_FLASH_Program(TYPEPROGRAM_WORD, fa->fa_off, src);
+
+  HAL_FLASH_Lock();
     return -1;
 } 
 
@@ -143,9 +160,9 @@ int flash_area_id_from_multi_image_slot(int image_index, int slot){
 
 int flash_area_id_from_image_slot(int slot){
     if(slot == 0 )
-        return FLASH_AREA_PRIMARY_ID;
-    // if(slot == 1)
-    //     return FLASH_AREA_SECONDARY_ID;
+        return FLASH_AREA_IMAGE_PRIMARY(0);
+    if(slot == 1)
+        return FLASH_AREA_IMAGE_SECONDARY(0);
     return -1;
 }
 
