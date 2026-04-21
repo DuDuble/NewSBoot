@@ -1,10 +1,12 @@
 #include "flash_map_backend/flash_map_backend.h"
-#include "stm32f7xx_hal_flash.h"
+#include "bootutil/bootutil_public.h"
+#include "stm32f7xx.h"
+#include "stm32f7xx_hal.h"
 #include "sysflash/sysflash.h"
 #include <stdbool.h>
 #include <stddef.h>
 #include <string.h>
-#include <stm32_hal_legacy.h>
+
 
 //------------ Alignment -----------------
 #define ALIGN_OFFSET(num,align)  ((num) & ((align)-1))
@@ -24,7 +26,8 @@
 #define IMAGE_PRIMARY_START_ADDRESS 0x8020000
 #define APPLICATION_SIZE 0x12200 // 72K + 512 ( FLASH + HEADER )
 
-// //------------- Secondary Slot ---------------
+// //------------- Secondary Slot ---------------#include "stm32f7xx.h"
+#include "stm32f7xx_hal.h"
 
 #define IMAGE_SECONDARY_START_ADDRESS 0x8032200
 
@@ -102,41 +105,95 @@ int flash_area_read(const struct flash_area *fa, uint32_t off, void *dst, uint32
     return 0;
 }
 
-int flash_area_erase(const struct flash_area *fa, uint32_t off, uint32_t len){
-    return -1;
+static uint32_t getSector(uint32_t addr){
+    if(addr < 0x8008000) return FLASH_SECTOR_0;
+    else if (addr < 0x8010000) return FLASH_SECTOR_1;
+    else if (addr < 0x8018000) return FLASH_SECTOR_2;
+    else if (addr < 0x8020000) return FLASH_SECTOR_3;
+    else if (addr < 0x8040000) return FLASH_SECTOR_4;
+    else if (addr < 0x8080000) return FLASH_SECTOR_5;
+    else if (addr < 0x80C0000) return FLASH_SECTOR_6;
+    return FLASH_SECTOR_7;
 }
+
+int flash_area_erase(const struct flash_area *fa, uint32_t off, uint32_t len){
+    HAL_FLASH_Unlock();
+    FLASH_EraseInitTypeDef erase;
+    erase.TypeErase = FLASH_TYPEERASE_SECTORS;
+    erase.NbSectors = 1;
+    erase.Sector = getSector((fa->fa_off + off));
+    erase.VoltageRange = FLASH_VOLTAGE_RANGE_3;
+
+    uint32_t eraseError;
+    HAL_FLASHEx_Erase(&erase,&eraseError);
+    HAL_FLASH_Lock();
+    return 0;
+}
+
+
 
 int flash_area_write(const struct flash_area *fa, uint32_t off, const void *src, uint32_t len){
     
   HAL_FLASH_Unlock();
   
-  FLASH_EraseInitTypeDef erase;
-  erase.TypeErase = FLASH_TYPEERASE_SECTORS;
-  erase.NbSectors = 1;
-  erase.Sector = FLASH_SECTOR_3;
-  erase.VoltageRange = FLASH_VOLTAGE_RANGE_3;
+ 
+  for (uint32_t i = 0; i < len; i++)
+  {
+      /* code */
+          HAL_FLASH_Program(FLASH_TYPEPROGRAM_BYTE, (fa->fa_off + off) + i , ((uint8_t*)src)[i]);
+    }
+  
 
-  uint32_t eraseError;
-  HAL_FLASHEx_Erase(&erase,&eraseError);
-  HAL_FLASH_Program(TYPEPROGRAM_WORD, fa->fa_off, src);
-
-  HAL_FLASH_Lock();
-    return -1;
+    HAL_FLASH_Lock();
+    return 0;
 } 
 
 
 uint32_t flash_area_align(const struct flash_area *area){
-    return -1;
+    if( area->fa_device_id == FLASH_DEVICE_INTERNAL_FLASH )
+        return FLASH_ALIGN;
+    return 0;
 }
 
 
 
 uint8_t flash_area_erased_val(const struct flash_area *area){
-    return -1;
+    if(area->fa_device_id == FLASH_DEVICE_INTERNAL_FLASH)
+        return ERASED_VAL;
+    return 0;
 }
 
 
 int flash_area_get_sectors(int fa_id, uint32_t *count,struct flash_sector *sectors){
+    if(fa_id == FLASH_AREA_BOOTLOADER)
+    {
+        *count = 4;
+        sectors[0].fs_off = 0;
+        sectors[0].fs_size = 0x8000;
+
+        sectors[1].fs_off = 0x8000;
+        sectors[1].fs_size = 0x8000;
+
+        sectors[2].fs_off = 0x10000;
+        sectors[2].fs_size = 0x8000;
+
+        sectors[3].fs_off = 0x18000;
+        sectors[3].fs_size = 0x8000;
+
+        return 0;
+    }
+    if(fa_id == FLASH_AREA_IMAGE_PRIMARY(0)){
+        *count = 1;
+        sectors[0].fs_off = 0;
+        sectors[0].fs_size = 0x20000;
+        return 0;
+    }
+    if(fa_id == FLASH_AREA_IMAGE_SECONDARY(0)){
+        *count = 1;
+        sectors[0].fs_off = 0;
+        sectors[0].fs_size = 0x40000;
+        return 0;
+    }
     return -1;
 }
 
@@ -155,6 +212,12 @@ int flash_area_get_sector(const struct flash_area *area, uint32_t off,struct fla
 
 
 int flash_area_id_from_multi_image_slot(int image_index, int slot){
+    switch (slot) {
+      case 0:
+        return FLASH_AREA_IMAGE_PRIMARY(image_index);
+      case 1:
+        return FLASH_AREA_IMAGE_SECONDARY(image_index);
+    }
     return -1;
 }
 
@@ -167,5 +230,6 @@ int flash_area_id_from_image_slot(int slot){
 }
 
 int flash_area_to_sectors(int idx, int *cnt, struct flash_area *fa){
+    
     return -1;
 }

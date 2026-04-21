@@ -12,3 +12,6 @@
                                          FLASH_SLOT_DOES_NOT_EXIST)
 
 #define HEADER_OFFSET 512
+
+#define FLASH_ALIGN 4 
+#define ERASED_VAL 0xFF

@@ -57,7 +57,6 @@ MEMORY
 {
 RAM (xrw)      : ORIGIN = 0x20000000, LENGTH = 320K
 FLASH (rx)     : ORIGIN = 0x8000000, LENGTH = 96K
-META (rw)      : ORIGIN = 0x8018000, LENGTH = 4K 
 }
 
 /* Highest address of the user mode stack */
@@ -150,12 +149,7 @@ SECTIONS
   } >FLASH
 
 
-  _version = 0;
-
-  .version :
-  {
-    LONG(_version);
-  } > META 
+  
 
   /* used by the startup to initialize data */
   _sidata = LOADADDR(.data);
