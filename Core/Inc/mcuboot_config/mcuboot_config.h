@@ -8,7 +8,7 @@
 
 
 /* Basic options */
-#define MCUBOOT_VALIDATE_PRIMARY_SLOT 0
+#define MCUBOOT_VALIDATE_PRIMARY_SLOT 1
 
 #endif
 
@@ -23,8 +23,7 @@
     do {                                        \
     } while (0) 
 
-//Overwrite, No SWAP
-#define MCUBOOT_OVERWRITE_ONLY 1
+#define MCUBOOT_SWAP_USING_SCRATCH 1
 
 //we use RSA
 #define MCUBOOT_SIGN_RSA 1

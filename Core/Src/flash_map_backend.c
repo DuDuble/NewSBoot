@@ -23,13 +23,17 @@
 
 //-------------- Primary Slot ---------------
 
-#define IMAGE_PRIMARY_START_ADDRESS 0x8020000
+#define IMAGE_PRIMARY_START_ADDRESS 0x8040000
 #define APPLICATION_SIZE 0x12200 // 72K + 512 ( FLASH + HEADER )
 
-// //------------- Secondary Slot ---------------#include "stm32f7xx.h"
+//------------- Secondary Slot ---------------#include "stm32f7xx.h"
 #include "stm32f7xx_hal.h"
 
-#define IMAGE_SECONDARY_START_ADDRESS 0x8032200
+#define IMAGE_SECONDARY_START_ADDRESS 0x8080000
+
+//-------------- Scratch ---------------------
+#define SCRATCH_START_ADDRESS  0x80C0000
+#define SCRATCH_SIZE 0x40000
 
 //--------------- Aree ----------------------
 
@@ -54,6 +58,12 @@ static const  flash_area secondary_image = {
     .fa_size = APPLICATION_SIZE
 };
 
+static const  flash_area scratch = {
+    .fa_id = FLASH_AREA_IMAGE_SCRATCH,
+    .fa_device_id = FLASH_DEVICE_INTERNAL_FLASH,
+    .fa_off = SCRATCH_START_ADDRESS,
+    .fa_size = SCRATCH_SIZE
+};
 //------------ Areas Array ------------
 
 static const flash_area* arr_flash_areas[] =
@@ -61,6 +71,7 @@ static const flash_area* arr_flash_areas[] =
     &bootloader,
     &primary_image,
     &secondary_image,
+    &scratch,
 };
 
 static const flash_area* lookup_flash_area(uint8_t id){
@@ -185,11 +196,17 @@ int flash_area_get_sectors(int fa_id, uint32_t *count,struct flash_sector *secto
     if(fa_id == FLASH_AREA_IMAGE_PRIMARY(0)){
         *count = 1;
         sectors[0].fs_off = 0;
-        sectors[0].fs_size = 0x20000;
+        sectors[0].fs_size = 0x40000;
         return 0;
     }
     if(fa_id == FLASH_AREA_IMAGE_SECONDARY(0)){
         *count = 1;
+        sectors[0].fs_off = 0;
+        sectors[0].fs_size = 0x40000;
+        return 0;
+    }
+    if(fa_id == FLASH_AREA_IMAGE_SCRATCH){
+        *count = 1; 
         sectors[0].fs_off = 0;
         sectors[0].fs_size = 0x40000;
         return 0;
@@ -204,7 +221,70 @@ int flash_area_sector_from_off(uint32_t off, struct flash_sector *sector){
 
 //! Retrieve the flash sector a given offset belongs to.
 int flash_area_get_sector(const struct flash_area *area, uint32_t off,struct flash_sector *sector){
+    
+    switch (getSector(area->fa_off + off))
+    {
+    case FLASH_SECTOR_0:
+       {
+            sector->fs_off = 0x8000000 - area->fa_off;
+            sector->fs_size = 0x8000;
+            return 0;
+            break;
+        }
+    case FLASH_SECTOR_1:
+       {
+            sector->fs_off = 0x8008000- area->fa_off;
+            sector->fs_size = 0x8000;
+            return 0;
+            break;
+        }
+    case FLASH_SECTOR_2:
+       {
+            sector->fs_off = 0x8010000 - area->fa_off;
+            sector->fs_size = 0x8000;
+            return 0;
+            break;
+        }
+    case FLASH_SECTOR_3:
+        {
+            sector->fs_off = 0x8018000 - area->fa_off;
+            sector->fs_size = 0x8000;
+            return 0;
+            break;
+        }
+    case FLASH_SECTOR_4:
+    {
+        sector->fs_off = 0x8020000 - area->fa_off;
+        sector->fs_size = 0x20000;
+        return 0;
+        break;
+    }
+    case FLASH_SECTOR_5:
+    {
+        sector->fs_off = 0x8040000 - area->fa_off;
+        sector->fs_size = 0x40000;
+        return 0;
+        break;
+    }
+    case FLASH_SECTOR_6:
+    {
+        sector->fs_off = 0x8080000 - area->fa_off;
+        sector->fs_size = 0x40000;
+        return 0;
+        break;
+    }
+    case FLASH_SECTOR_7:
+    {
+        sector->fs_off = 0x80C0000 - area->fa_off;
+        sector->fs_size = 0x40000;
+        return 0;
+        break;
+    }
+    default:
+        break;
+    }
     return -1;
+    
 }
 
 

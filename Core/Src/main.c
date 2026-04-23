@@ -65,8 +65,8 @@ typedef struct
 
 // Memory address, they are not updated automatically
 #define BOOT_META 0x8018000
-#define APP_ADDR_HEADER 0x8020000
-#define APP_ADDR_FLASH 0x8020200
+#define APP_ADDR_HEADER 0x8040000
+#define APP_ADDR_FLASH 0x8040200
 
 /* USER CODE END PD */
 
@@ -182,12 +182,13 @@ int main(void)
   MX_MBEDTLS_Init();
   /* USER CODE BEGIN 2 */
 
-
+ 
   struct boot_rsp rsp;
 
   int rc = boot_go(&rsp);
 
   if(!rc){
+      boot_set_pending(0);
       bootJump((uint32_t*)(rsp.br_image_off + rsp.br_hdr->ih_hdr_size));
       printf("Something went Wrong \r\n");
   }
