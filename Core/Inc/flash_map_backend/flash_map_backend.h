@@ -103,3 +103,5 @@ int flash_area_get_sector(const struct flash_area *area, uint32_t off,struct fla
 int flash_area_id_from_multi_image_slot(int image_index, int slot);
 int flash_area_id_from_image_slot(int slot);
 int flash_area_to_sectors(int idx, int *cnt, struct flash_area *fa);
+
+int flash_area_id_to_multi_image_slot(int image_index,uint8_t id);

@@ -16,6 +16,11 @@
 #define MCUBOOT_USE_MBED_TLS 1
 
 
+//-------------------- Encryption Image -------------------
+#define MCUBOOT_ENC_IMAGES 1
+#define MCUBOOT_ENCRYPT_RSA 1
+
+
 #define MCUBOOT_MAX_IMG_SECTORS 3
 
 //WE do not use watchdog

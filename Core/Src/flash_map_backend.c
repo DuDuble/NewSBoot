@@ -19,7 +19,7 @@
 #define FLASH_AREA_BOOTLOADER  0 // va in sysflash
 #define FLASH_DEVICE_INTERNAL_FLASH 0 // va in sysflash
 #define BOOTLOADER_START_ADDRESS 0x80000000
-#define BOOTLOADER_SIZE 0x19000 // 100KB ( FLASH + META section )
+#define BOOTLOADER_SIZE 0x20000 // 100KB ( FLASH + META section )
 
 //-------------- Primary Slot ---------------
 
@@ -311,5 +311,13 @@ int flash_area_id_from_image_slot(int slot){
 
 int flash_area_to_sectors(int idx, int *cnt, struct flash_area *fa){
     
+    return -1;
+}
+
+int flash_area_id_to_multi_image_slot(int image_index,uint8_t id){
+    if(id == FLASH_AREA_IMAGE_PRIMARY(image_index) )
+        return 0;
+    if(id == FLASH_AREA_IMAGE_SECONDARY(image_index))
+        return 1;
     return -1;
 }

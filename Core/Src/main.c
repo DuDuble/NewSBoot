@@ -184,11 +184,11 @@ int main(void)
 
  
   struct boot_rsp rsp;
-
+  printf("Boot GO called \r\n");
   int rc = boot_go(&rsp);
+  boot_set_pending(0);
 
   if(!rc){
-      boot_set_pending(0);
       bootJump((uint32_t*)(rsp.br_image_off + rsp.br_hdr->ih_hdr_size));
       printf("Something went Wrong \r\n");
   }
